@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Yarn Berry specific files (if applicable)
+.yarn/cache/
+.yarn/install-state.gz
+
+# Log files
+yarn-error.log
+
+# Editor and IDE specific files
+.vscode/
+.idea/
+
+# Build outputs
+dist/
+build/
