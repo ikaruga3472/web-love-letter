@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="ko" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Love Letter (4p) - Socket Demo</title>
+  <title>Midnight Love Letter</title>
   <link
     rel="stylesheet"
     href="https://unpkg.com/@picocss/pico@latest/css/pico.min.css"
@@ -36,6 +36,7 @@
       overflow: auto; /* allow scrolling when content is tall */
     }
     .modal-card h4 { margin-top: 0; }
+    #consoleLog { max-height: 320px; min-height: 160px; }
   </style>
 </head>
 <body>
@@ -47,30 +48,35 @@
     </header>
 
     <article id="lobby">
-      <h3>Lobby</h3>
+      <h3>대기실</h3>
       <div class="form-grid">
-        <label>Room <input id="roomId" placeholder="lobby-1" /></label>
-        <label>Name <input id="name" placeholder="Player" /></label>
-        <button id="join" class="secondary">Join</button>
-        <button id="start" class="contrast">Start Game</button>
+        <label>방 코드 <input id="roomId" placeholder="lobby-1" /></label>
+        <label>이름 <input id="name" placeholder="플레이어" /></label>
+        <button id="join" class="secondary">입장</button>
+        <button id="start" class="contrast">게임 시작</button>
       </div>
-      <small id="status"></small>
+    </article>
+
+    <article id="console" data-requires-room>
+      <h3>콘솔</h3>
+      <p>상태 메시지와 로그를 한 곳에서 확인할 수 있습니다.</p>
+      <pre id="consoleLog" aria-live="polite"></pre>
     </article>
 
     <article data-requires-room>
-      <h3>Players</h3>
+      <h3>플레이어</h3>
       <div id="players" class="pill-row"></div>
     </article>
 
     <article data-requires-room data-requires-start>
-      <h3>Your Hand</h3>
+      <h3>내 패</h3>
       <div class="form-grid">
-        <label>Target
+        <label>대상
           <select id="target">
-            <option value="">None</option>
+            <option value="">없음</option>
           </select>
         </label>
-      <label>Guard Guess (2-8)
+      <label>경비병 추측 (2-8)
         <input id="guess" type="number" min="2" max="8" />
       </label>
       </div>
@@ -78,29 +84,24 @@
     </article>
 
     <article data-requires-room data-requires-start>
-      <h3>Discard</h3>
+      <h3>버린 카드</h3>
       <span id="deckInfo"></span>
       <div id="discard" class="pill-row"></div>
     </article>
 
     <article data-requires-room data-requires-start>
-      <h3>Log</h3>
-      <pre id="log"></pre>
-    </article>
-
-    <article data-requires-room data-requires-start>
-      <h3>Debug State</h3>
+      <h3>디버그 상태</h3>
       <pre id="state"></pre>
     </article>
 
     <section class="space-top">
-      <button id="showRules" class="secondary">룰 및 스토리 보기</button>
+      <button id="showRules" class="secondary">룰 및 기타 정보</button>
     </section>
 
     <div id="rulesModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
       <article class="modal-card">
         <header>
-          <h4>Midnight Love Letter</h4>
+          <h4>미드나이트 러브레터</h4>
         </header>
         <h4>카드 효과</h4>
         <ul>
@@ -136,20 +137,30 @@
     const nameInput = document.getElementById('name');
     const joinBtn = document.getElementById('join');
     const startBtn = document.getElementById('start');
-    const statusEl = document.getElementById('status');
+    const consoleLogEl = document.getElementById('consoleLog');
     const playersEl = document.getElementById('players');
     const handEl = document.getElementById('hand');
     const targetEl = document.getElementById('target');
     const guessEl = document.getElementById('guess');
     const discardEl = document.getElementById('discard');
     const deckInfoEl = document.getElementById('deckInfo');
-    const logEl = document.getElementById('log');
     const stateEl = document.getElementById('state');
     const roomSections = document.querySelectorAll('[data-requires-room]');
     const startedSections = document.querySelectorAll('[data-requires-start]');
     const rulesModal = document.getElementById('rulesModal');
     const showRulesBtn = document.getElementById('showRules');
     const closeRulesBtn = document.getElementById('closeRules');
+    const CARD_LABELS = {
+      Guard: '경비병',
+      Priest: '사제',
+      Baron: '남작',
+      Handmaid: '시녀',
+      Prince: '왕자',
+      King: '왕',
+      Countess: '백작부인',
+      Princess: '공주',
+    };
+    const labelCard = (name) => CARD_LABELS[name] || name;
 
     const showRoomUI = (show) => {
       roomSections.forEach((el) => el.classList.toggle('hidden', !show));
@@ -163,45 +174,63 @@
     showStartedUI(false);
 
     let currentRoom = '';
+    let lastState = null;
+    const clientLog = [];
+
+    const pushClientLog = (message) => {
+      if (!message) return;
+      clientLog.push(message);
+      if (clientLog.length > 20) clientLog.shift();
+    };
+    const renderConsole = (state) => {
+      const lines = [];
+      if (state?.log?.length) lines.push(...state.log);
+      if (clientLog.length) lines.push(...clientLog);
+      consoleLogEl.textContent = lines.length
+        ? lines.slice(-24).join('\n')
+        : '아직 메시지가 없습니다. 게임을 시작하세요!';
+    };
 
     joinBtn.onclick = () => {
+      if (currentRoom) {
+        pushClientLog('이미 방에 입장해 있습니다.');
+        renderConsole(lastState);
+        return;
+      }
       const roomId = roomInput.value.trim() || 'lobby-1';
       currentRoom = roomId;
       socket.emit('join-room', { roomId, name: nameInput.value.trim() });
-      statusEl.textContent = `Joined ${roomId}`;
+      pushClientLog(`${roomId} 방에 입장했습니다.`);
+      renderConsole(lastState);
     };
 
     startBtn.onclick = () => {
       if (!currentRoom) {
-        statusEl.textContent = 'Join a room first.';
+        pushClientLog('먼저 방에 입장하세요.');
+        renderConsole(lastState);
         return;
       }
+      pushClientLog('게임 시작 요청을 전송했습니다.');
+      renderConsole(lastState);
       socket.emit('start-game', currentRoom);
     };
 
     socket.on('state', (state) => {
       showRoomUI(true);
       showStartedUI(Boolean(state.started));
+      lastState = state;
       stateEl.textContent = JSON.stringify(state, null, 2);
       renderPlayers(state);
       renderHand(state);
       renderDiscard(state);
-      renderLog(state);
       renderTargetOptions(state);
-      deckInfoEl.textContent = `Deck: ${state.deckCount} | Burned: ${state.burns}`;
-      const me = state.players.find((p) => p.isYou);
-      if (state.ended && state.winner) {
-        statusEl.textContent = `Round ended. Winner: ${state.winner.name}`;
-      } else if (me?.isCurrent) {
-        statusEl.textContent = 'Your turn';
-      } else if (state.currentPlayer) {
-        const current = state.players.find((p) => p.id === state.currentPlayer);
-        statusEl.textContent = `Waiting for ${current?.name || 'player'}`;
-      }
+      deckInfoEl.textContent = `덱: ${state.deckCount}장 | 소각 카드: ${state.burns}장`;
+      renderConsole(state);
     });
 
     socket.on('error-message', (msg) => {
-      statusEl.textContent = msg;
+      pushClientLog(msg);
+      renderConsole(lastState);
       if (!currentRoom) {
         showRoomUI(false);
         showStartedUI(false);
@@ -215,7 +244,7 @@
     };
 
     function renderTargetOptions(state) {
-      targetEl.innerHTML = '<option value="">None</option>';
+      targetEl.innerHTML = '<option value="">없음</option>';
       state.players
         .filter((p) => !p.isYou && !p.eliminated)
         .forEach((p) => {
@@ -232,13 +261,12 @@
         const chip = document.createElement('span');
         const flags = [
           p.isCurrent ? '★' : '',
-          p.protected ? 'P' : '',
-          p.eliminated ? 'X' : '',
-          p.isYou ? 'you' : '',
+          p.protected ? '보호' : '',
+          p.eliminated ? '탈락' : '',
         ]
           .filter(Boolean)
           .join(' ');
-        chip.textContent = `${p.name} (${p.handCount})${flags ? ' [' + flags + ']' : ''}`;
+        chip.textContent = `${p.name} ${flags ? ' [' + flags + ']' : ''}`;
         playersEl.appendChild(chip);
       });
     }
@@ -248,7 +276,7 @@
       const hand = state.you?.hand || [];
       hand.forEach((card, idx) => {
         const btn = document.createElement('button');
-        btn.textContent = `${card.name} (${card.value})`;
+        btn.textContent = `${labelCard(card.name)} (${card.value})`;
         btn.onclick = () =>
           socket.emit('play-card', {
             roomId: currentRoom,
@@ -259,19 +287,19 @@
         handEl.appendChild(btn);
       });
       if (!hand.length) {
-        handEl.textContent = 'No cards yet. Start the game!';
+        handEl.textContent = '아직 패가 없습니다. 게임을 시작하세요!';
       }
     }
 
     function renderDiscard(state) {
       const nameById = Object.fromEntries(state.players.map((p) => [p.id, p.name]));
       discardEl.innerHTML = state.discard
-        .map((c) => `${c.by || 'Player'} played ${c.name}${c.target ? ' -> ' + (nameById[c.target] || c.target) : ''}`)
+        .map((c) => {
+          const owner = c.by || '플레이어';
+          const target = c.target ? ` → ${nameById[c.target] || c.target}` : '';
+          return `${owner}님이 ${labelCard(c.name)}를 사용했습니다${target}`;
+        })
         .join(' | ');
-    }
-
-    function renderLog(state) {
-      logEl.textContent = state.log.join('\n');
     }
   </script>
 </body>

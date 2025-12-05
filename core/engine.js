@@ -3,13 +3,13 @@ const createRoom = (spec, roomId) => {
 
   const join = (id, name) => {
     if (state.started && !state.players[id]) {
-      return { error: 'Game already started.' };
+      return { error: '게임이 이미 시작되었습니다.' };
     }
     if (!state.players[id] && spec.maxPlayers && state.order.length >= spec.maxPlayers) {
-      return { error: 'Room full.' };
+      return { error: '방 인원이 가득 찼습니다.' };
     }
     if (!state.players[id]) {
-      const playerName = name?.trim() || `Player-${state.order.length + 1}`;
+      const playerName = name?.trim() || `플레이어-${state.order.length + 1}`;
       state.players[id] = {
         id,
         name: playerName,
@@ -23,9 +23,9 @@ const createRoom = (spec, roomId) => {
   };
 
   const start = () => {
-    if (state.started && !state.ended) return { error: 'Game already started.' };
+    if (state.started && !state.ended) return { error: '게임이 이미 시작되었습니다.' };
     if (state.order.length < (spec.minPlayers || 2)) {
-      return { error: `Need at least ${spec.minPlayers || 2} players.` };
+      return { error: `최소 ${spec.minPlayers || 2}명의 플레이어가 필요합니다.` };
     }
     state.ended = false;
     spec.setup(state);
@@ -48,11 +48,11 @@ const createRoom = (spec, roomId) => {
   };
 
   const act = (playerId, action) => {
-    if (!state.started) return { error: 'Game not started.' };
-    if (state.ended) return { error: 'Round already ended.' };
-    if (state.currentPlayer !== playerId) return { error: 'Not your turn.' };
+    if (!state.started) return { error: '게임이 아직 시작되지 않았습니다.' };
+    if (state.ended) return { error: '이번 라운드가 이미 종료되었습니다.' };
+    if (state.currentPlayer !== playerId) return { error: '지금은 당신의 차례가 아닙니다.' };
     if (state.runtime.players[playerId]?.eliminated) {
-      return { error: 'Eliminated players cannot act.' };
+      return { error: '탈락한 플레이어는 행동할 수 없습니다.' };
     }
 
     const result = spec.handleAction(state, playerId, action);

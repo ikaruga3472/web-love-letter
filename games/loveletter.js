@@ -9,6 +9,27 @@ const baseDeck = [
   { name: 'Princess', value: 8, count: 1 },
 ];
 
+const CARD_LABELS = {
+  Guard: '경비병',
+  Priest: '사제',
+  Baron: '남작',
+  Handmaid: '시녀',
+  Prince: '왕자',
+  King: '왕',
+  Countess: '백작부인',
+  Princess: '공주',
+};
+
+const ELIMINATION_REASONS = {
+  'Guard guess': '경비병 추측 적중',
+  'Princess discarded': '공주를 버렸습니다',
+  'Princess played': '공주를 냈습니다',
+  Baron: '남작 대결 패배',
+};
+
+const labelCard = (name) => CARD_LABELS[name] || name;
+const describeReason = (reason) => (reason ? ELIMINATION_REASONS[reason] || reason : '');
+
 const makeDeck = () => {
   const deck = [];
   baseDeck.forEach((card) => {
@@ -48,7 +69,7 @@ const setup = (state) => {
   state.deck = makeDeck();
   state.discard = [];
   state.burns = [];
-  state.log = [`Game starting with ${state.order.length} players.`];
+  state.log = [`${state.order.length}명으로 게임을 시작합니다.`];
   state.ended = false;
   state.winner = null;
   state.runtime = { players: {}, lastPeek: null };
@@ -61,7 +82,7 @@ const setup = (state) => {
     const card = state.deck.pop();
     if (card) state.burns.push(card);
   }
-  state.log.push(`Burned ${burnCount} card(s).`);
+  state.log.push(`버린 카드: ${burnCount}장.`);
 
   state.order.forEach((id) => {
     drawCard(state, id);
@@ -84,8 +105,8 @@ const startTurn = (state) => {
   if (!player || player.eliminated) return;
   player.protected = false;
   const drawn = drawCard(state, state.currentPlayer);
-  if (drawn) state.log.push(`${state.players[state.currentPlayer].name} draws.`);
-  else state.log.push('Deck empty, final turns.');
+  if (drawn) state.log.push(`${state.players[state.currentPlayer].name}님이 카드를 한 장 뽑았습니다.`);
+  else state.log.push('덱이 비어 마지막 한 바퀴를 진행합니다.');
 };
 
 const validateCountess = (player) => {
@@ -98,41 +119,42 @@ const eliminate = (state, playerId, reason) => {
   const p = state.runtime.players[playerId];
   if (p && !p.eliminated) {
     p.eliminated = true;
-    state.log.push(`${state.players[playerId].name} is eliminated${reason ? ` (${reason})` : ''}.`);
+    const reasonText = describeReason(reason);
+    state.log.push(`${state.players[playerId].name}님이 탈락했습니다${reasonText ? ` (${reasonText})` : ''}.`);
   }
 };
 
 const handleAction = (state, actorId, payload) => {
   const actorRuntime = state.runtime.players[actorId];
   const actorInfo = state.players[actorId];
-  if (!actorRuntime) return { error: 'Unknown actor.' };
+  if (!actorRuntime) return { error: '알 수 없는 플레이어입니다.' };
   if (!validateCountess(actorRuntime) && actorRuntime.hand[payload.cardIndex]?.name !== 'Countess') {
-    return { error: 'Must play Countess when holding King or Prince.' };
+    return { error: '왕자 또는 왕과 함께 있을 때는 반드시 백작부인을 내야 합니다.' };
   }
 
   const card = actorRuntime.hand.splice(payload.cardIndex, 1)[0];
-  if (!card) return { error: 'Invalid card selection.' };
+  if (!card) return { error: '잘못된 카드 선택입니다.' };
 
   state.discard.push({ ...card, by: actorInfo.name, target: payload.targetId, guess: payload.guess });
-  state.log.push(`${actorInfo.name} plays ${card.name}.`);
+  state.log.push(`${actorInfo.name}님이 ${labelCard(card.name)}를 냈습니다.`);
 
   const target = payload.targetId ? state.runtime.players[payload.targetId] : null;
   const targetInfo = payload.targetId ? state.players[payload.targetId] : null;
 
   if (card.name === 'Guard') {
     if (!payload.targetId || payload.targetId === actorId || !target || target.protected || target.eliminated) {
-      state.log.push('Guard has no effect.');
+      state.log.push('경비병 효과가 적용되지 않았습니다.');
     } else if (payload.guess === 1) {
-      state.log.push('Guard cannot guess Guard.');
+      state.log.push('경비병으로 경비병을 지목할 수 없습니다.');
     } else if (target.hand[0]?.value === payload.guess) {
       eliminate(state, payload.targetId, 'Guard guess');
     } else {
-      state.log.push('Guard guess misses.');
+      state.log.push('경비병 추측이 빗나갔습니다.');
     }
   } else if (card.name === 'Priest') {
     if (target && payload.targetId !== actorId && !target.protected && !target.eliminated && target.hand[0]) {
       state.runtime.lastPeek = { viewerId: actorId, targetId: payload.targetId, card: target.hand[0] };
-      state.log.push(`${actorInfo.name} peeks at ${targetInfo.name}.`);
+      state.log.push(`${actorInfo.name}님이 ${targetInfo.name}님의 카드를 확인했습니다.`);
     }
   } else if (card.name === 'Baron') {
     if (target && payload.targetId !== actorId && !target.protected && !target.eliminated && target.hand[0]) {
@@ -140,7 +162,7 @@ const handleAction = (state, actorId, payload) => {
       const targetVal = target.hand[0].value;
       if (myVal > targetVal) eliminate(state, payload.targetId, 'Baron');
       else if (targetVal > myVal) eliminate(state, actorId, 'Baron');
-      else state.log.push('Baron tie, no one eliminated.');
+      else state.log.push('남작 대결 무승부로 아무도 탈락하지 않습니다.');
     }
   } else if (card.name === 'Handmaid') {
     actorRuntime.protected = true;
@@ -150,7 +172,7 @@ const handleAction = (state, actorId, payload) => {
     if (victim && !victim.eliminated && (!victim.protected || victimId === actorId)) {
       const dumped = victim.hand.pop();
       if (dumped) {
-        state.log.push(`${state.players[victimId].name} discards ${dumped.name}.`);
+        state.log.push(`${state.players[victimId].name}님이 ${labelCard(dumped.name)}를 버렸습니다.`);
         state.discard.push({ ...dumped, by: state.players[victimId].name });
         if (dumped.name === 'Princess') {
           eliminate(state, victimId, 'Princess discarded');
@@ -159,14 +181,14 @@ const handleAction = (state, actorId, payload) => {
         }
       }
     } else {
-      state.log.push('Prince has no effect.');
+      state.log.push('왕자 카드 효과가 적용되지 않았습니다.');
     }
   } else if (card.name === 'King') {
     if (target && payload.targetId !== actorId && !target.protected && !target.eliminated) {
       const temp = actorRuntime.hand;
       actorRuntime.hand = target.hand;
       target.hand = temp;
-      state.log.push(`${actorInfo.name} swaps hands with ${targetInfo.name}.`);
+      state.log.push(`${actorInfo.name}님이 ${targetInfo.name}님과 손패를 교환했습니다.`);
     }
   } else if (card.name === 'Countess') {
     // No effect.
@@ -228,7 +250,7 @@ const buildView = (state, viewerId) => {
       const r = state.runtime.players[id];
       return {
         id,
-        name: p?.name || 'Unknown',
+        name: p?.name || '알 수 없음',
         handCount: r?.hand.length || 0,
         eliminated: r?.eliminated || false,
         protected: r?.protected || false,
