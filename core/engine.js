@@ -1,5 +1,10 @@
 const createRoom = (spec, roomId) => {
   const state = spec.initialState(roomId);
+  const pushLog = (line) => {
+    if (!line) return;
+    state.log.push(line);
+    if (state.log.length > 100) state.log.shift();
+  };
 
   const join = (id, name) => {
     if (state.started && !state.players[id]) {
@@ -16,6 +21,7 @@ const createRoom = (spec, roomId) => {
       };
       state.order.push(id);
       state.runtime.players[id] = spec.createRuntimePlayer();
+      pushLog(`${playerName}님이 ${state.roomId} 방에 입장했습니다.`);
     } else if (name) {
       state.players[id].name = name.trim();
     }

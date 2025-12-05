@@ -29,6 +29,11 @@ const ELIMINATION_REASONS = {
 
 const labelCard = (name) => CARD_LABELS[name] || name;
 const describeReason = (reason) => (reason ? ELIMINATION_REASONS[reason] || reason : '');
+const pushLog = (state, line) => {
+  if (!line) return;
+  state.log.push(line);
+  if (state.log.length > 100) state.log.shift();
+};
 
 const makeDeck = () => {
   const deck = [];
@@ -69,20 +74,20 @@ const setup = (state) => {
   state.deck = makeDeck();
   state.discard = [];
   state.burns = [];
-  state.log = [`${state.order.length}명으로 게임을 시작합니다.`];
   state.ended = false;
   state.winner = null;
   state.runtime = { players: {}, lastPeek: null };
   state.order.forEach((id) => {
     state.runtime.players[id] = createRuntimePlayer();
   });
+  pushLog(state, `${state.order.length}명으로 게임을 시작합니다.`);
 
   const burnCount = state.order.length === 2 ? 4 : 1;
   for (let i = 0; i < burnCount; i += 1) {
     const card = state.deck.pop();
     if (card) state.burns.push(card);
   }
-  state.log.push(`버린 카드: ${burnCount}장.`);
+  pushLog(state, `버린 카드: ${burnCount}장.`);
 
   state.order.forEach((id) => {
     drawCard(state, id);
@@ -105,8 +110,8 @@ const startTurn = (state) => {
   if (!player || player.eliminated) return;
   player.protected = false;
   const drawn = drawCard(state, state.currentPlayer);
-  if (drawn) state.log.push(`${state.players[state.currentPlayer].name}님이 카드를 한 장 뽑았습니다.`);
-  else state.log.push('덱이 비어 마지막 한 바퀴를 진행합니다.');
+  if (drawn) pushLog(state, `${state.players[state.currentPlayer].name}님이 카드를 한 장 뽑았습니다.`);
+  else pushLog(state, '덱이 비어 마지막 한 바퀴를 진행합니다.');
 };
 
 const validateCountess = (player) => {
@@ -120,7 +125,7 @@ const eliminate = (state, playerId, reason) => {
   if (p && !p.eliminated) {
     p.eliminated = true;
     const reasonText = describeReason(reason);
-    state.log.push(`${state.players[playerId].name}님이 탈락했습니다${reasonText ? ` (${reasonText})` : ''}.`);
+    pushLog(state, `${state.players[playerId].name}님이 탈락했습니다${reasonText ? ` (${reasonText})` : ''}.`);
   }
 };
 
@@ -136,25 +141,25 @@ const handleAction = (state, actorId, payload) => {
   if (!card) return { error: '잘못된 카드 선택입니다.' };
 
   state.discard.push({ ...card, by: actorInfo.name, target: payload.targetId, guess: payload.guess });
-  state.log.push(`${actorInfo.name}님이 ${labelCard(card.name)}를 냈습니다.`);
+  pushLog(state, `${actorInfo.name}님이 ${labelCard(card.name)}를 냈습니다.`);
 
   const target = payload.targetId ? state.runtime.players[payload.targetId] : null;
   const targetInfo = payload.targetId ? state.players[payload.targetId] : null;
 
   if (card.name === 'Guard') {
     if (!payload.targetId || payload.targetId === actorId || !target || target.protected || target.eliminated) {
-      state.log.push('경비병 효과가 적용되지 않았습니다.');
+      pushLog(state, '경비병 효과가 적용되지 않았습니다.');
     } else if (payload.guess === 1) {
-      state.log.push('경비병으로 경비병을 지목할 수 없습니다.');
+      pushLog(state, '경비병으로 경비병을 지목할 수 없습니다.');
     } else if (target.hand[0]?.value === payload.guess) {
       eliminate(state, payload.targetId, 'Guard guess');
     } else {
-      state.log.push('경비병 추측이 빗나갔습니다.');
+      pushLog(state, '경비병 추측이 빗나갔습니다.');
     }
   } else if (card.name === 'Priest') {
     if (target && payload.targetId !== actorId && !target.protected && !target.eliminated && target.hand[0]) {
       state.runtime.lastPeek = { viewerId: actorId, targetId: payload.targetId, card: target.hand[0] };
-      state.log.push(`${actorInfo.name}님이 ${targetInfo.name}님의 카드를 확인했습니다.`);
+      pushLog(state, `${actorInfo.name}님이 ${targetInfo.name}님의 카드를 확인했습니다.`);
     }
   } else if (card.name === 'Baron') {
     if (target && payload.targetId !== actorId && !target.protected && !target.eliminated && target.hand[0]) {
@@ -162,7 +167,7 @@ const handleAction = (state, actorId, payload) => {
       const targetVal = target.hand[0].value;
       if (myVal > targetVal) eliminate(state, payload.targetId, 'Baron');
       else if (targetVal > myVal) eliminate(state, actorId, 'Baron');
-      else state.log.push('남작 대결 무승부로 아무도 탈락하지 않습니다.');
+      else pushLog(state, '남작 대결 무승부로 아무도 탈락하지 않습니다.');
     }
   } else if (card.name === 'Handmaid') {
     actorRuntime.protected = true;
@@ -172,7 +177,7 @@ const handleAction = (state, actorId, payload) => {
     if (victim && !victim.eliminated && (!victim.protected || victimId === actorId)) {
       const dumped = victim.hand.pop();
       if (dumped) {
-        state.log.push(`${state.players[victimId].name}님이 ${labelCard(dumped.name)}를 버렸습니다.`);
+        pushLog(state, `${state.players[victimId].name}님이 ${labelCard(dumped.name)}를 버렸습니다.`);
         state.discard.push({ ...dumped, by: state.players[victimId].name });
         if (dumped.name === 'Princess') {
           eliminate(state, victimId, 'Princess discarded');
@@ -181,14 +186,14 @@ const handleAction = (state, actorId, payload) => {
         }
       }
     } else {
-      state.log.push('왕자 카드 효과가 적용되지 않았습니다.');
+      pushLog(state, '왕자 카드 효과가 적용되지 않았습니다.');
     }
   } else if (card.name === 'King') {
     if (target && payload.targetId !== actorId && !target.protected && !target.eliminated) {
       const temp = actorRuntime.hand;
       actorRuntime.hand = target.hand;
       target.hand = temp;
-      state.log.push(`${actorInfo.name}님이 ${targetInfo.name}님과 손패를 교환했습니다.`);
+      pushLog(state, `${actorInfo.name}님이 ${targetInfo.name}님과 손패를 교환했습니다.`);
     }
   } else if (card.name === 'Countess') {
     // No effect.

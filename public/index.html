@@ -174,63 +174,53 @@
     showStartedUI(false);
 
     let currentRoom = '';
-    let lastState = null;
-    const clientLog = [];
+    let latestLog = [];
 
-    const pushClientLog = (message) => {
-      if (!message) return;
-      clientLog.push(message);
-      if (clientLog.length > 20) clientLog.shift();
-    };
-    const renderConsole = (state) => {
-      const lines = [];
-      if (state?.log?.length) lines.push(...state.log);
-      if (clientLog.length) lines.push(...clientLog);
+    const renderConsole = (log = latestLog) => {
+      const lines = Array.isArray(log) ? log : [];
       consoleLogEl.textContent = lines.length
         ? lines.slice(-24).join('\n')
         : '아직 메시지가 없습니다. 게임을 시작하세요!';
     };
 
+    const flashMessage = (msg) => {
+      if (!msg) return;
+      renderConsole([msg, ...(latestLog || [])]);
+    };
+
     joinBtn.onclick = () => {
       if (currentRoom) {
-        pushClientLog('이미 방에 입장해 있습니다.');
-        renderConsole(lastState);
+        flashMessage('이미 방에 입장해 있습니다.');
         return;
       }
       const roomId = roomInput.value.trim() || 'lobby-1';
       currentRoom = roomId;
       socket.emit('join-room', { roomId, name: nameInput.value.trim() });
-      pushClientLog(`${roomId} 방에 입장했습니다.`);
-      renderConsole(lastState);
     };
 
     startBtn.onclick = () => {
       if (!currentRoom) {
-        pushClientLog('먼저 방에 입장하세요.');
-        renderConsole(lastState);
+        flashMessage('먼저 방에 입장하세요.');
         return;
       }
-      pushClientLog('게임 시작 요청을 전송했습니다.');
-      renderConsole(lastState);
       socket.emit('start-game', currentRoom);
     };
 
     socket.on('state', (state) => {
       showRoomUI(true);
       showStartedUI(Boolean(state.started));
-      lastState = state;
+      latestLog = state.log || [];
       stateEl.textContent = JSON.stringify(state, null, 2);
       renderPlayers(state);
       renderHand(state);
       renderDiscard(state);
       renderTargetOptions(state);
       deckInfoEl.textContent = `덱: ${state.deckCount}장 | 소각 카드: ${state.burns}장`;
-      renderConsole(state);
+      renderConsole();
     });
 
     socket.on('error-message', (msg) => {
-      pushClientLog(msg);
-      renderConsole(lastState);
+      flashMessage(msg);
       if (!currentRoom) {
         showRoomUI(false);
         showStartedUI(false);
