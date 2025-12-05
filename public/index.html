@@ -1,70 +1,76 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Love Letter (4p) - Socket Demo</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/@picocss/pico@latest/css/pico.min.css"
+  />
   <style>
-    :root { font-family: "Segoe UI", sans-serif; background: #0f172a; color: #e2e8f0; }
-    body { margin: 0; padding: 24px; }
-    .panel { background: #111827; border: 1px solid #1f2937; border-radius: 10px; padding: 16px; margin-bottom: 12px; }
-    input, button { padding: 8px 10px; border-radius: 8px; border: 1px solid #1f2937; background: #0b1220; color: #e2e8f0; }
-    button { cursor: pointer; font-weight: 600; }
-    button.primary { background: linear-gradient(120deg, #22d3ee, #6366f1); border: none; color: #0b1220; }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-    #players span { display: inline-block; margin-right: 8px; padding: 6px 10px; border-radius: 999px; background: #1f2937; }
-    #hand button { margin-right: 8px; margin-bottom: 8px; }
-    pre { background: #0b1220; padding: 12px; border-radius: 8px; overflow: auto; }
+    main { padding-block: 1.5rem; }
+    .form-grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; }
+    .pill-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    pre { max-height: 240px; overflow: auto; }
+    .space-top { margin-top: 0.5rem; }
   </style>
 </head>
 <body>
-  <div class="panel">
-    <div class="row" style="gap: 8px 12px;">
-      <label>Room <input id="roomId" placeholder="lobby-1" /></label>
-      <label>Name <input id="name" placeholder="Player" /></label>
-      <button id="join">Join</button>
-      <button id="start" class="primary">Start Game</button>
-      <span id="status"></span>
-    </div>
-  </div>
+  <main class="container">
+    <header>
+      <hgroup>
+        <h1>Midnight Love Letter</h1>
+      </hgroup>
+    </header>
 
-  <div class="panel">
-    <h3>Players</h3>
-    <div id="players"></div>
-  </div>
+    <article>
+      <h3>Lobby</h3>
+      <div class="form-grid">
+        <label>Room <input id="roomId" placeholder="lobby-1" /></label>
+        <label>Name <input id="name" placeholder="Player" /></label>
+        <button id="join" class="secondary">Join</button>
+        <button id="start" class="contrast">Start Game</button>
+      </div>
+      <small id="status"></small>
+    </article>
 
-  <div class="panel">
-    <h3>Your Hand</h3>
-    <div class="row" style="margin-bottom: 8px;">
-      <label>Target
-        <select id="target">
-          <option value="">None</option>
-        </select>
-      </label>
+    <article>
+      <h3>Players</h3>
+      <div id="players" class="pill-row"></div>
+    </article>
+
+    <article>
+      <h3>Your Hand</h3>
+      <div class="form-grid">
+        <label>Target
+          <select id="target">
+            <option value="">None</option>
+          </select>
+        </label>
       <label>Guard Guess (2-8)
-        <input id="guess" type="number" min="2" max="8" style="width: 80px;" />
+        <input id="guess" type="number" min="2" max="8" />
       </label>
-    </div>
-    <div id="hand"></div>
-  </div>
+      </div>
+      <div id="hand" class="pill-row space-top"></div>
+    </article>
 
-  <div class="panel">
-    <h3>Discard</h3>
-    <div class="row" style="margin-bottom: 6px;">
+    <article>
+      <h3>Discard</h3>
       <span id="deckInfo"></span>
-    </div>
-    <div id="discard"></div>
-  </div>
+      <div id="discard" class="pill-row"></div>
+    </article>
 
-  <div class="panel">
-    <h3>Log</h3>
-    <pre id="log"></pre>
-  </div>
+    <article>
+      <h3>Log</h3>
+      <pre id="log"></pre>
+    </article>
 
-  <div class="panel">
-    <h3>Debug State</h3>
-    <pre id="state"></pre>
-  </div>
+    <article>
+      <h3>Debug State</h3>
+      <pre id="state"></pre>
+    </article>
+  </main>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
