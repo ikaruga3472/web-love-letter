@@ -13,8 +13,29 @@
     .form-grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; }
     .pill-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     pre { max-height: 240px; overflow: auto; }
-    .hidden { display: none; }
+    .hidden { display: none !important; }
     .space-top { margin-top: 0.5rem; }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: grid;
+      place-items: center;
+      padding: 1rem;
+      z-index: 10;
+    }
+    .modal-card {
+      background: var(--pico-card-background-color);
+      color: var(--pico-color);
+      max-width: 640px;
+      max-height: min(90vh, 100%);
+      width: min(640px, 100%);
+      padding: 1.25rem;
+      border-radius: 0.75rem;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      overflow: auto; /* allow scrolling when content is tall */
+    }
+    .modal-card h4 { margin-top: 0; }
   </style>
 </head>
 <body>
@@ -25,7 +46,7 @@
       </hgroup>
     </header>
 
-    <article>
+    <article id="lobby">
       <h3>Lobby</h3>
       <div class="form-grid">
         <label>Room <input id="roomId" placeholder="lobby-1" /></label>
@@ -71,6 +92,41 @@
       <h3>Debug State</h3>
       <pre id="state"></pre>
     </article>
+
+    <section class="space-top">
+      <button id="showRules" class="secondary">룰 및 스토리 보기</button>
+    </section>
+
+    <div id="rulesModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+      <article class="modal-card">
+        <header>
+          <h4>Midnight Love Letter</h4>
+        </header>
+        <h4>카드 효과</h4>
+        <ul>
+          <li>1. 경비병: 플레이어를 한 명 지목해서 경비병 카드 외에 상대가 가진 카드를 추측하여 선언한다. 만약 맞췄을 경우 지목된 플레이어는 탈락한다.</li>
+          <li>2. 사제: 플레이어 한 명을 지목해서 그 플레이어가 손에 들고 있는 카드를 확인한다.</li>
+          <li>3. 남작: 플레이어 한 명을 지목해서 자신의 손에 남아있는 카드와 상대가 들고 있는 카드를 비교한다. 이때 더 낮은 숫자를 가진 플레이어는 탈락한다.</li>
+          <li>4. 시녀: 다음 차례가 올 때까지 다른 카드의 영향을 받지 않는다.</li>
+          <li>5. 왕자: 자신, 혹은 다른 플레이어 중 한 명을 지목해서 카드를 버리고 다시 뽑게 한다. 공주를 제외한 카드 효과는 발동하지 않는다.</li>
+          <li>6. 왕: 플레이어 중 한 명을 지목하여 손에 든 카드를 서로 교환한다.</li>
+          <li>7. 백작부인: 왕자 혹은 왕 카드와 함께 들고 있는 경우 반드시 이 카드를 버려야 한다. 아닐 경우에는 선택적으로 버릴 수 있다.</li>
+          <li>8. 공주: 버리면 탈락한다.</li>
+        </ul>
+        <h4>스토리</h4>
+        <p>마리아나 왕비가 대역죄로 구금 당하게 된 사건으로 인해서 왕비의 딸인 아네트 공주보다 비통해하는 사람은 없을 것입니다.</p>
+        <p>이와 같은 상황에서 도시국가인 템페스트의 도처에서 아네트 공주의 슬픔을 사랑으로 덜어주고자 하는 청혼자들이 몰려들었습니다.</p>
+        <p>여러분들은 바로 이 청혼자들 중 한명이 되어 아네트 공주에게 편지를 전하고자 하게 됩니다.</p>
+        <p>하지만 안타깝게도, 공주는 자신의 처소에서 도무지 나오려 하지 않기에 궁궐에 있는 사람들에게 편지를 전달해 주기를 부탁할 수밖에 없습니다.</p>
+        <p>여러분들은 몰래 카드 한 장을 손에 가지고 게임을 진행해 나갑니다.</p>
+        <p>이 카드가 바로 아네트 공주를 향한 당신의 사랑이 담긴 편지를 전달해 줄 사람입니다.</p>
+        <p>하루가 끝날 때, 공주와 가장 가까운 사람이 여러분의 편지를 지니도록 하시기 바랍니다.</p>
+        <p>여러분의 편지가 가장 먼저 아네트 공주에게 닿도록 말입니다.</p>
+        <footer class="space-top">
+          <button id="closeRules" class="secondary">닫기</button>
+        </footer>
+      </article>
+    </div>
   </main>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -91,6 +147,9 @@
     const stateEl = document.getElementById('state');
     const roomSections = document.querySelectorAll('[data-requires-room]');
     const startedSections = document.querySelectorAll('[data-requires-start]');
+    const rulesModal = document.getElementById('rulesModal');
+    const showRulesBtn = document.getElementById('showRules');
+    const closeRulesBtn = document.getElementById('closeRules');
 
     const showRoomUI = (show) => {
       roomSections.forEach((el) => el.classList.toggle('hidden', !show));
@@ -148,6 +207,12 @@
         showStartedUI(false);
       }
     });
+
+    showRulesBtn.onclick = () => rulesModal.classList.remove('hidden');
+    closeRulesBtn.onclick = () => rulesModal.classList.add('hidden');
+    rulesModal.onclick = (e) => {
+      if (e.target === rulesModal) rulesModal.classList.add('hidden');
+    };
 
     function renderTargetOptions(state) {
       targetEl.innerHTML = '<option value="">None</option>';
