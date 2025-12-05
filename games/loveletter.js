@@ -178,7 +178,7 @@ const handleAction = (state, actorId, payload) => {
     if (victim && !victim.eliminated && (!victim.protected || victimId === actorId)) {
       const dumped = victim.hand.pop();
       if (dumped) {
-        pushLog(state, `${state.players[victimId].name}님이 ${labelCard(dumped.name)}를 버렸습니다.`);
+        pushLog(state, `${state.players[victimId].name}님이 ${labelCard(dumped.name)}을(를) 버렸습니다.`);
         state.discard.push({ ...dumped, by: state.players[victimId].name });
         if (dumped.name === 'Princess') {
           eliminate(state, victimId, 'Princess discarded');
