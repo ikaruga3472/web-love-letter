@@ -69,6 +69,8 @@ const createRoom = (spec, roomId) => {
       state.ended = true;
       state.winner = endResult.winner;
       state.started = false;
+      const winnerName = state.players[state.winner]?.name || '알 수 없는 플레이어';
+      pushLog(`${winnerName}님이 라운드에서 승리했습니다.`);
       return { ok: true, ended: true };
     }
 
