@@ -10,8 +10,8 @@
   />
   <style>
     main { padding-block: 1.5rem; }
-    .form-grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; }
-    .pill-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .form-grid { display: grid; gap: 0.75rem; align-items: end; }
+    .pill-row { display: flex; gap: 0.5rem; flex-wrap: wrap; flex-direction: column; }
     pre { max-height: 240px; overflow: auto; }
     .hidden { display: none !important; }
     .space-top { margin-top: 0.5rem; }
@@ -58,8 +58,7 @@
     </article>
 
     <article id="console" data-requires-room>
-      <h3>콘솔</h3>
-      <p>상태 메시지와 로그를 한 곳에서 확인할 수 있습니다.</p>
+      <h3>로그</h3>
       <pre id="consoleLog" aria-live="polite"></pre>
     </article>
 
@@ -69,22 +68,21 @@
     </article>
 
     <article data-requires-room data-requires-start>
-      <h3>내 패</h3>
+      <h3>행동</h3>
       <div class="form-grid">
-        <label>대상
-          <select id="target">
-            <option value="">없음</option>
-          </select>
-        </label>
-      <label>경비병 추측 (2-8)
-        <input id="guess" type="number" min="2" max="8" />
-      </label>
+        <section>
+          <div id="hand" class="pill-row space-top"></div>
+        </section>
+        <section>
+          <div id="requirements" class="pill-row space-top"></div>
+          <button id="playAction" class="contrast space-top">실행</button>
+          <small id="actionHint"></small>
+        </section>
       </div>
-      <div id="hand" class="pill-row space-top"></div>
     </article>
 
     <article data-requires-room data-requires-start>
-      <h3>버린 카드</h3>
+      <h3>테이블</h3>
       <span id="deckInfo"></span>
       <div id="discard" class="pill-row"></div>
     </article>
@@ -140,8 +138,9 @@
     const consoleLogEl = document.getElementById('consoleLog');
     const playersEl = document.getElementById('players');
     const handEl = document.getElementById('hand');
-    const targetEl = document.getElementById('target');
-    const guessEl = document.getElementById('guess');
+    const requirementsEl = document.getElementById('requirements');
+    const playActionBtn = document.getElementById('playAction');
+    const actionHintEl = document.getElementById('actionHint');
     const discardEl = document.getElementById('discard');
     const deckInfoEl = document.getElementById('deckInfo');
     const stateEl = document.getElementById('state');
@@ -175,6 +174,8 @@
 
     let currentRoom = '';
     let latestLog = [];
+    let currentActions = [];
+    let selectedActionIndex = null;
 
     const renderConsole = (log = latestLog) => {
       const lines = Array.isArray(log) ? log : [];
@@ -212,9 +213,8 @@
       latestLog = state.log || [];
       stateEl.textContent = JSON.stringify(state, null, 2);
       renderPlayers(state);
-      renderHand(state);
+      renderActions(state);
       renderDiscard(state);
-      renderTargetOptions(state);
       deckInfoEl.textContent = `덱: ${state.deckCount}장 | 소각 카드: ${state.burns}장`;
       renderConsole();
     });
@@ -233,18 +233,6 @@
       if (e.target === rulesModal) rulesModal.classList.add('hidden');
     };
 
-    function renderTargetOptions(state) {
-      targetEl.innerHTML = '<option value="">없음</option>';
-      state.players
-        .filter((p) => !p.isYou && !p.eliminated)
-        .forEach((p) => {
-          const opt = document.createElement('option');
-          opt.value = p.id;
-          opt.textContent = p.name;
-          targetEl.appendChild(opt);
-        });
-    }
-
     function renderPlayers(state) {
       playersEl.innerHTML = '';
       state.players.forEach((p) => {
@@ -261,24 +249,129 @@
       });
     }
 
-    function renderHand(state) {
+    function renderActions(state) {
       handEl.innerHTML = '';
-      const hand = state.you?.hand || [];
-      hand.forEach((card, idx) => {
+      requirementsEl.innerHTML = '';
+      actionHintEl.textContent = '';
+      currentActions = state.actions || [];
+
+      if (!state.started || !state.you) {
+        handEl.textContent = '아직 패가 없습니다. 게임을 시작하세요!';
+        playActionBtn.disabled = true;
+        return;
+      }
+
+      if (selectedActionIndex === null || selectedActionIndex >= currentActions.length) {
+        selectedActionIndex = currentActions.length ? 0 : null;
+      }
+
+      if (!currentActions.length) {
+        handEl.textContent =
+          state.currentPlayer === state.you.id
+            ? '선택할 수 있는 행동이 없습니다.'
+            : '다른 플레이어의 차례입니다.';
+        playActionBtn.disabled = true;
+        return;
+      }
+
+      currentActions.forEach((action, idx) => {
         const btn = document.createElement('button');
-        btn.textContent = `${labelCard(card.name)} (${card.value})`;
-        btn.onclick = () =>
-          socket.emit('play-card', {
-            roomId: currentRoom,
-            cardIndex: idx,
-            targetId: targetEl.value || null,
-            guess: guessEl.value ? Number(guessEl.value) : undefined,
-          });
+        btn.textContent = action.label;
+        btn.type = 'button';
+        if (action.disabledReason) {
+          btn.disabled = true;
+          btn.title = action.disabledReason;
+        }
+        if (idx === selectedActionIndex) btn.classList.add('contrast');
+        btn.onclick = () => {
+          if (action.disabledReason) return;
+          selectedActionIndex = idx;
+          renderActions(state);
+        };
         handEl.appendChild(btn);
       });
-      if (!hand.length) {
-        handEl.textContent = '아직 패가 없습니다. 게임을 시작하세요!';
+
+      renderRequirements();
+    }
+
+    // 현재 선택된 행동에 필요한 입력 UI를 만들고 제출/검증 로직을 연결한다.
+    function renderRequirements() {
+      requirementsEl.innerHTML = '';
+      actionHintEl.textContent = '';
+      const action = currentActions[selectedActionIndex];
+      if (!action) {
+        playActionBtn.disabled = true;
+        return;
       }
+
+      const inputs = {};
+      const targetReq = action.requires?.find((r) => r.type === 'target');
+      const guessReq = action.requires?.find((r) => r.type === 'guess');
+
+      action.requires?.forEach((req) => {
+        if (req.type === 'target') {
+          const label = document.createElement('label');
+          label.textContent = req.label || '대상';
+          const select = document.createElement('select');
+          select.dataset.field = 'targetId';
+          const empty = document.createElement('option');
+          empty.value = '';
+          empty.textContent = '선택하세요';
+          select.appendChild(empty);
+          req.options?.forEach((opt) => {
+            const option = document.createElement('option');
+            option.value = opt.id;
+            option.textContent = opt.label;
+            select.appendChild(option);
+          });
+          label.appendChild(select);
+          requirementsEl.appendChild(label);
+          inputs.targetId = select;
+        } else if (req.type === 'guess') {
+          const label = document.createElement('label');
+          label.textContent = req.label || '추측';
+          const input = document.createElement('input');
+          input.type = 'number';
+          if (req.min) input.min = req.min;
+          if (req.max) input.max = req.max;
+          input.dataset.field = 'guess';
+          label.appendChild(input);
+          requirementsEl.appendChild(label);
+          inputs.guess = input;
+        }
+      });
+
+      playActionBtn.onclick = () => {
+        if (action.disabledReason) return;
+        const payload = { roomId: currentRoom, cardIndex: action.cardIndex };
+        let invalid = '';
+
+        if (inputs.targetId) {
+          const val = inputs.targetId.value;
+          if (!val) {
+            if (!targetReq?.optional) invalid = '대상을 선택하세요.';
+          } else payload.targetId = val;
+        }
+
+        if (!invalid && inputs.guess) {
+          const val = Number(inputs.guess.value);
+          if (Number.isNaN(val)) invalid = '추측 숫자를 입력하세요.';
+          else if (guessReq?.min && val < guessReq.min) invalid = '숫자가 너무 작습니다.';
+          else if (guessReq?.max && val > guessReq.max) invalid = '숫자가 너무 큽니다.';
+          else if ((guessReq?.exclude || []).includes(val)) invalid = '해당 숫자는 선택할 수 없습니다.';
+          else payload.guess = val;
+        }
+
+        if (invalid) {
+          actionHintEl.textContent = invalid;
+          return;
+        }
+
+        socket.emit('play-card', payload);
+      };
+
+      playActionBtn.disabled = Boolean(action.disabledReason);
+      actionHintEl.textContent = action.disabledReason || '';
     }
 
     function renderDiscard(state) {

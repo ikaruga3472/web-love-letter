@@ -224,6 +224,66 @@ const checkEnd = (state) => {
   return { ended: false };
 };
 
+const buildActions = (state, viewerId) => {
+  if (!state.started || state.ended || state.currentPlayer !== viewerId) return [];
+  const actor = state.runtime.players[viewerId];
+  if (!actor || actor.eliminated) return [];
+
+  const buildTargetOptions = (filterFn) =>
+    state.order
+      .filter((id) => id !== viewerId && filterFn(state.runtime.players[id]))
+      .map((id) => ({ id, label: state.players[id]?.name || '알 수 없음' }));
+
+  const actions = [];
+
+  actor.hand.forEach((card, idx) => {
+    if (!validateCountess(actor) && card.name !== 'Countess') return;
+
+    const action = {
+      cardIndex: idx,
+      card,
+      label: `${labelCard(card.name)} (${card.value})`,
+      requires: [],
+      disabledReason: '',
+    };
+
+    if (card.name === 'Guard') {
+      const targets = buildTargetOptions((p) => p && !p.eliminated && !p.protected);
+      action.requires.push({ type: 'target', options: targets, label: '대상' });
+      action.requires.push({ type: 'guess', min: 2, max: 8, exclude: [1], label: '추측 숫자 (2-8, 1 불가)' });
+      if (!targets.length) action.disabledReason = '지목할 수 있는 대상이 없습니다.';
+    } else if (card.name === 'Priest') {
+      const targets = buildTargetOptions((p) => p && !p.eliminated && !p.protected && p.hand[0]);
+      action.requires.push({ type: 'target', options: targets, label: '대상' });
+      if (!targets.length) action.disabledReason = '확인할 대상이 없습니다.';
+    } else if (card.name === 'Baron') {
+      const targets = buildTargetOptions((p) => p && !p.eliminated && !p.protected && p.hand[0]);
+      action.requires.push({ type: 'target', options: targets, label: '대상' });
+      if (!targets.length) action.disabledReason = '대결할 대상이 없습니다.';
+    } else if (card.name === 'Prince') {
+      const targets = state.order
+        .filter((id) => !state.runtime.players[id]?.eliminated)
+        .map((id) => ({
+          id,
+          label: id === viewerId ? `${state.players[id]?.name || '나'} (자신)` : state.players[id]?.name || '알 수 없음',
+          protected: !!state.runtime.players[id]?.protected,
+        }))
+        .filter((t) => !t.protected || t.id === viewerId);
+      action.requires.push({ type: 'target', options: targets, label: '대상 (없으면 자신)', optional: true });
+      if (!targets.length) action.disabledReason = '대상이 없습니다.';
+    } else if (card.name === 'King') {
+      const targets = buildTargetOptions((p) => p && !p.eliminated && !p.protected);
+      action.requires.push({ type: 'target', options: targets, label: '대상' });
+      if (!targets.length) action.disabledReason = '교환할 대상이 없습니다.';
+    }
+
+    if (!action.disabledReason) delete action.disabledReason;
+    actions.push(action);
+  });
+
+  return actions;
+};
+
 const buildView = (state, viewerId) => {
   const viewer = state.players[viewerId];
   const runtime = state.runtime.players[viewerId];
@@ -264,6 +324,7 @@ const buildView = (state, viewerId) => {
       };
     }),
     log: state.log.slice(-16),
+    actions: buildActions(state, viewerId),
   };
 };
 
