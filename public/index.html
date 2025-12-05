@@ -375,14 +375,8 @@
     }
 
     function renderDiscard(state) {
-      const nameById = Object.fromEntries(state.players.map((p) => [p.id, p.name]));
-      discardEl.innerHTML = state.discard
-        .map((c) => {
-          const owner = c.by || '플레이어';
-          const target = c.target ? ` → ${nameById[c.target] || c.target}` : '';
-          return `${owner}님이 ${labelCard(c.name)}를 사용했습니다${target}`;
-        })
-        .join(' | ');
+      const usedCards = state.discard.map((c) => labelCard(c.name));
+      discardEl.textContent = usedCards.length ? `사용된 카드: ${usedCards.join(' | ')}` : '아직 사용된 카드가 없습니다.';
     }
   </script>
 </body>
