@@ -142,7 +142,7 @@ const handleAction = (state, actorId, payload) => {
   if (!card) return { error: '잘못된 카드 선택입니다.' };
 
   state.discard.push({ ...card, by: actorInfo.name, target: payload.targetId, guess: payload.guess });
-  pushLog(state, `${actorInfo.name}님이 ${labelCard(card.name)}를 냈습니다.`);
+  pushLog(state, `${actorInfo.name}님이 ${labelCard(card.name)}(을)를 냈습니다.`);
 
   const target = payload.targetId ? state.runtime.players[payload.targetId] : null;
   const targetInfo = payload.targetId ? state.players[payload.targetId] : null;

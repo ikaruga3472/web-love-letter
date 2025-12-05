@@ -68,6 +68,8 @@
     </article>
 
     <article data-requires-room data-requires-start>
+      <h3>내 카드</h3>
+      <div id="yourCards" class="pill-row space-top"></div>
       <h3>행동</h3>
       <div class="form-grid">
         <section>
@@ -87,10 +89,10 @@
       <div id="discard" class="pill-row"></div>
     </article>
 
-    <article data-requires-room data-requires-start>
+    <!-- <article data-requires-room data-requires-start>
       <h3>디버그 상태</h3>
       <pre id="state"></pre>
-    </article>
+    </article> -->
 
     <section class="space-top">
       <button id="showRules" class="secondary">룰 및 기타 정보</button>
@@ -138,6 +140,7 @@
     const consoleLogEl = document.getElementById('consoleLog');
     const playersEl = document.getElementById('players');
     const handEl = document.getElementById('hand');
+    const yourCardsEl = document.getElementById('yourCards');
     const requirementsEl = document.getElementById('requirements');
     const playActionBtn = document.getElementById('playAction');
     const actionHintEl = document.getElementById('actionHint');
@@ -213,6 +216,7 @@
       latestLog = state.log || [];
       stateEl.textContent = JSON.stringify(state, null, 2);
       renderPlayers(state);
+      renderYourCards(state);
       renderActions(state);
       renderDiscard(state);
       deckInfoEl.textContent = `덱: ${state.deckCount}장 남음`;
@@ -246,6 +250,24 @@
           .join(' ');
         chip.textContent = `${p.name} ${flags ? ' [' + flags + ']' : ''}`;
         playersEl.appendChild(chip);
+      });
+    }
+
+    function renderYourCards(state) {
+      yourCardsEl.innerHTML = '';
+      if (!state.started || !state.you) {
+        yourCardsEl.textContent = '아직 패가 없습니다. 게임을 시작하세요!';
+        return;
+      }
+      const cards = state.you.hand || [];
+      if (!cards.length) {
+        yourCardsEl.textContent = '손에 카드가 없습니다.';
+        return;
+      }
+      cards.forEach((card) => {
+        const chip = document.createElement('span');
+        chip.textContent = `${labelCard(card.name)} (${card.value})`;
+        yourCardsEl.appendChild(chip);
       });
     }
 
