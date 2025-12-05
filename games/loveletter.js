@@ -87,7 +87,8 @@ const setup = (state) => {
     const card = state.deck.pop();
     if (card) state.burns.push(card);
   }
-  pushLog(state, `버린 카드: ${burnCount}장.`);
+  pushLog(state, `제거된 카드: ${burnCount}장.`);
+  pushLog(state, `남은 카드: ${state.deck.length}장.`);
 
   state.order.forEach((id) => {
     drawCard(state, id);
