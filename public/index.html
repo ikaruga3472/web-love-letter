@@ -48,18 +48,12 @@
     </header>
 
     <article id="lobby">
-      <h3>대기실</h3>
       <div class="form-grid">
         <label>방 코드 <input id="roomId" placeholder="lobby-1" /></label>
         <label>이름 <input id="name" placeholder="플레이어" /></label>
         <button id="join" class="secondary">입장</button>
         <button id="start" class="contrast">게임 시작</button>
       </div>
-    </article>
-
-    <article id="console" data-requires-room>
-      <h3>로그</h3>
-      <pre id="consoleLog" aria-live="polite"></pre>
     </article>
 
     <article data-requires-room>
@@ -87,6 +81,17 @@
       <h3>테이블</h3>
       <span id="deckInfo"></span>
       <div id="discard" class="pill-row"></div>
+    </article>
+
+    <article id="console" data-requires-room>
+      <h3>로그</h3>
+      <pre
+        id="consoleLog"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-atomic="false"
+      ></pre>
     </article>
 
     <!-- <article data-requires-room data-requires-start>
@@ -177,19 +182,47 @@
 
     let currentRoom = '';
     let latestLog = [];
+    let renderedLogCount = 0;
+    const EMPTY_LOG_TEXT = '아직 메시지가 없습니다.';
     let currentActions = [];
     let selectedActionIndex = null;
 
     const renderConsole = (log = latestLog) => {
-      const lines = Array.isArray(log) ? log : [];
-      consoleLogEl.textContent = lines.length
-        ? lines.slice(-24).join('\n')
-        : '아직 메시지가 없습니다. 게임을 시작하세요!';
+      latestLog = Array.isArray(log) ? log : [];
+      const lines = latestLog.slice(-100);
+
+      if (lines.length < renderedLogCount) {
+        consoleLogEl.replaceChildren();
+        renderedLogCount = 0;
+      }
+
+      if (!lines.length) {
+        consoleLogEl.textContent = EMPTY_LOG_TEXT;
+        renderedLogCount = 0;
+        return;
+      }
+
+      if (!consoleLogEl.childElementCount) {
+        consoleLogEl.textContent = '';
+      }
+
+      const newLines = lines.slice(renderedLogCount);
+      newLines.forEach((line) => {
+        const item = document.createElement('div');
+        item.textContent = line;
+        consoleLogEl.appendChild(item);
+      });
+      renderedLogCount = lines.length;
+
+      while (consoleLogEl.childElementCount > 24) {
+        consoleLogEl.firstElementChild?.remove();
+      }
     };
 
     const flashMessage = (msg) => {
       if (!msg) return;
-      renderConsole([msg, ...(latestLog || [])]);
+      latestLog = [msg, ...(latestLog || [])];
+      renderConsole(latestLog);
     };
 
     joinBtn.onclick = () => {
